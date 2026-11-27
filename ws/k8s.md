@@ -1,4 +1,4 @@
-<img width="890" height="291" alt="image" src="https://github.com/user-attachments/assets/6d418359-407c-4675-b3e3-4f27497d11c9" /># wsl 安裝 k8s 教學
+# wsl 安裝 k8s 教學
 ## (1) 前置準備
 - 要先確認 wsl 是不是 wsl2，檢查方式可以從 powershell 確認
 - 如果不是再做轉換
@@ -93,7 +93,8 @@ newgrp docker
 docker run hello-world
 ```
 
-- 接著安裝 kubectl
+## (3) 安裝 k3s
+- 安裝 kubectl
 
 ```sh
 curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
@@ -104,6 +105,8 @@ kubectl version --client
 - k3d 是一個在 Docker 內執行 Kubernetess Cluster 的工具，k3d = k3s + Docker
 
 - K8s 是「完整版、生產級」的標準 Kubernetes；而 K3s 是「輕量級、精簡版」的 Kubernetes
+<img width="1688" height="248" alt="image" src="https://github.com/user-attachments/assets/3e265415-e060-4c18-9b41-4ddb789fec32" />
+
 
 - 安裝 k3d
 
@@ -111,4 +114,85 @@ kubectl version --client
 curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh -o install-k3d.sh
 chmod +x install-k3d.sh
 sudo ./install-k3d.sh
+k3d version
+```
+
+- 建立 k8s cluster
+
+```sh
+k3d cluster create {name}
+```
+
+- 查看 nodes 確認 k8s 有正常運作
+
+``` sh
+kubectl get nodes
+>>> NAME                    STATUS   ROLES                  AGE   VERSION
+>>> k3d-dev-server-0        Ready    control-plane,master   30s   v1.xx.x
+```
+
+- 可以正常操作部屬環境了，如
+
+```sh
+kubectl create deployment nginx --image=nginx
+kubectl expose deployment nginx --port=80
+kubectl get pods
+kubectl get svc
+```
+
+- port forwarding (http://localhost:8080)
+
+```sh
+kubectl port-forward svc/nginx 8080:80
+```
+
+## (4) 自訂義 pod 內容並部屬
+
+- 將目錄下程式碼建立成 Image
+
+```sh
+docker build -t my-project:dev .
+```
+
+- 測試 image 啟動
+
+```sh
+docker run --rm -p 8080:8080 my-api:dev
+```
+
+- 接著把 Image 放入 k3s cluster
+
+```sh
+k3d image import my-api:dev -c dev
+```
+
+- 寫一般 deployment yaml 即可部屬
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: my-api
+  template:
+    metadata:
+      labels:
+        app: my-api
+    spec:
+      containers:
+        - name: my-api
+          image: my-api:dev
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+```
+
+- kubectl 部屬 yaml
+
+```sh
+kubectl apply -f deployment.yaml
 ```
